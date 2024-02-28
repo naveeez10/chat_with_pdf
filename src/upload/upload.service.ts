@@ -6,6 +6,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 export class UploadService {
   async processFile(filePath: string) {
     try {
+      console.log(filePath);
       const loader = new PDFLoader(filePath);
       const docs = await loader.load();
 
@@ -14,9 +15,7 @@ export class UploadService {
         chunkOverlap: 200,
       });
 
-      const chunkedDocs = await textSplitter.splitDocuments(docs);
-
-      return chunkedDocs;
+      return await textSplitter.splitDocuments(docs);
     } catch (e) {
       console.error(e);
       throw new Error('PDF docs chunking failed!');
