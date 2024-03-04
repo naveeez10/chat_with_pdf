@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
-import { PoolConfig } from 'pg';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UploadService {
+  constructor(private prisma: PrismaService) {}
+
   async processFile(filePath: string) {
     try {
       console.log(filePath);
@@ -19,6 +20,7 @@ export class UploadService {
       });
 
       const docs = await textSplitter.splitDocuments(chunks);
+      console.log(docs);
       return await this.createAndStoreVectorEmbeddings(docs);
     } catch (e) {
       console.error(e);
@@ -27,29 +29,23 @@ export class UploadService {
   }
 
   async createAndStoreVectorEmbeddings(docs) {
-    const config = {
-      postgresConnectionOptions: {
-        type: 'postgres',
-        host: '127.0.0.1',
-        port: 5433,
-        user: 'postgres',
-        password: 'postgres',
-        database: 'chat_with_pdf',
-      } as PoolConfig,
-      tableName: 'documents',
-      columns: {
-        idColumnName: 'id',
-        vectorColumnName: 'vector',
-        contentColumnName: 'content',
-        metadataColumnName: 'metadata',
-      },
-    };
-    return await PGVectorStore.fromDocuments(
-      docs,
-      new OpenAIEmbeddings({
-        openAIApiKey: 'replace_with_your_openai_api_key',
-      }),
-      config,
-    );
+    const embeddings = new OpenAIEmbeddings({
+      openAIApiKey: '',
+    });
+
+    const documentID = 'lolxdxd';
+
+    for (const doc of docs) {
+      const createdDoc = await this.prisma.document.create({
+        data: {
+          content: doc.pageContent,
+          docID: documentID,
+          metadata: doc.metadata,
+        },
+      });
+      const vectors = await embeddings.embedQuery(doc.pageContent);
+      await this.prisma
+        .$executeRaw`UPDATE "Document" SET vector = ${vectors} WHERE id = ${createdDoc.id}`;
+    }
   }
 }

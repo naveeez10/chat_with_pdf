@@ -1,12 +1,28 @@
-version: '3.8'
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: ankane/pgvector
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - "./data:/var/lib/postgresql/data"
+      - db:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: chat_with_pdf
+
+volumes:
+  db:
+
+#
+#version: '3.8'
+#services:
+#  citus:
+#    image: citusdata/citus:12.1
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - "./data:/var/lib/postgresql/data"
+#    environment:
+#      POSTGRES_PASSWORD: postgres
+#      POSTGRES_USER: postgres
+#      POSTGRES_DB: chat_with_pdf
