@@ -27,7 +27,7 @@ export class UploadService {
     try {
       await this.prisma.document.updateMany({
         where: { docID: documentID },
-        data: { processing: false },
+        data: { processing: true },
       });
 
       const loader = new PDFLoader(filePath);
@@ -43,7 +43,7 @@ export class UploadService {
       await this.createAndStoreVectorEmbeddings(docs, documentID);
       await this.prisma.document.updateMany({
         where: { docID: documentID },
-        data: { processing: true },
+        data: { processing: false },
       });
     } catch (e) {
       console.error(e);

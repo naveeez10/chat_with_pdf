@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { PrismaVectorStore } from "@langchain/community/vectorstores/prisma";
-import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
-import { Document, Prisma, PrismaClient } from "@prisma/client";
-import { PromptTemplate } from "@langchain/core/prompts";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { PrismaVectorStore } from '@langchain/community/vectorstores/prisma';
+import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
+import { Document, Prisma, PrismaClient } from '@prisma/client';
+import { PromptTemplate } from '@langchain/core/prompts';
 
 @Injectable()
 export class QaService {
