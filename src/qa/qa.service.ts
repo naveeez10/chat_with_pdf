@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { OpenAIEmbeddings } from '@langchain/openai';
-import { Prisma } from '@prisma/client';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { PrismaVectorStore } from "@langchain/community/vectorstores/prisma";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { Document, Prisma, PrismaClient } from "@prisma/client";
+import { PromptTemplate } from "@langchain/core/prompts";
 
 @Injectable()
 export class QaService {
@@ -11,27 +13,57 @@ export class QaService {
     question: string,
     docId: string,
   ): Promise<any> {
-    const embeddings = new OpenAIEmbeddings();
-    const queryVectors = await embeddings.embedQuery(question);
+    const context = await this.findSimilarDocuments(docId, question, 3);
+    const model = new ChatOpenAI();
+    const promptTemplate = PromptTemplate.fromTemplate(
+      `Refer to this context: ${context} and give the solution for this question:{question}`,
+    );
 
-    return await this.findSimilarDocuments(docId, queryVectors, 3);
+    const chain = promptTemplate.pipe(model);
+
+    return await chain.invoke({ question: question });
   }
 
   async findSimilarDocuments(
     documentID: string,
-    queryVector: any,
+    question: string,
     k: number,
   ): Promise<any> {
     try {
-      const sqlQuery = `
-          SELECT content
-          FROM "Document"
-          WHERE "docID" = $1
-          ORDER BY vector <=> $2 DESC
-              LIMIT $3
-      `;
+      const db = new PrismaClient();
 
-      await this.prisma.$executeRawUnsafe(sqlQuery, documentID, queryVector, k);
+      const vectorStore = PrismaVectorStore.withModel<Document>(db).create(
+        new OpenAIEmbeddings(),
+        {
+          prisma: Prisma,
+          tableName: 'Document',
+          vectorColumnName: 'vector',
+          columns: {
+            id: PrismaVectorStore.IdColumn,
+            content: PrismaVectorStore.ContentColumn,
+            docID: PrismaVectorStore.ContentColumn,
+          },
+        },
+      );
+
+      const filter = {
+        docID: {
+          equals: documentID,
+        },
+      };
+
+      console.log('document id:', documentID);
+      const results = await vectorStore.similaritySearchWithScore(
+        question,
+        k,
+        filter,
+      );
+      const pageContents: string[] = results.map(
+        (subArray) =>
+          (subArray[0] as { pageContent: string; metadata: any }).pageContent,
+      );
+
+      return JSON.stringify(pageContents);
     } catch (error) {
       console.error('Error finding similar documents:', error);
       throw error;

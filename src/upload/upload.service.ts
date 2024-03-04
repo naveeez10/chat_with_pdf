@@ -9,20 +9,22 @@ import { v4 as uuidv4 } from 'uuid';
 export class UploadService {
   constructor(private prisma: PrismaService) {}
 
-  handleFileUpload(filePath: string): { message: string } {
+  handleFileUpload(filePath: string): { documentId: string; message: string } {
     console.log(`File uploaded at ${filePath}`);
 
-    this.processFile(filePath).catch((error) => {
+    const docId = uuidv4();
+    this.processFile(filePath, docId).catch((error) => {
       console.error('Error processing file:', error);
     });
 
-    return { message: 'File uploaded successfully, processing in background.' };
+    return {
+      message: 'File uploaded successfully, processing in background.',
+      documentId: docId,
+    };
   }
 
-  async processFile(filePath: string) {
+  async processFile(filePath: string, documentID) {
     try {
-      const documentID = uuidv4();
-
       await this.prisma.document.updateMany({
         where: { docID: documentID },
         data: { processing: false },
@@ -63,8 +65,9 @@ export class UploadService {
         },
       });
       const vectors = await embeddings.embedQuery(doc.pageContent);
-      await this.prisma
-        .$executeRaw`UPDATE "Document" SET vector = ${vectors} WHERE id = ${createdDoc.id}`;
+      await this.prisma.$executeRaw`UPDATE "Document"
+                     SET vector = ${vectors}
+                     WHERE id = ${createdDoc.id}`;
     }
   }
 
