@@ -4,6 +4,8 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Param,
+  Get,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
@@ -34,12 +36,20 @@ export class UploadController {
       throw new BadRequestException('File is missing');
     }
     try {
-      file.path;
-      const processedData = await this.uploadService.processFile(file.path);
+      const processedData = this.uploadService.handleFileUpload(file.path);
       console.log(processedData);
       return processedData;
     } catch (error) {
       throw new BadRequestException(error.message);
     }
+  }
+  @Get('status/:documentID')
+  async checkProcessingStatus(@Param('documentID') documentID: string) {
+    const documents =
+      await this.uploadService.findDocumentsByDocumentID(documentID);
+    if (documents.length === 0) {
+      return { message: 'No documents found with the provided documentID.' };
+    }
+    return { processing: documents[0].processing };
   }
 }

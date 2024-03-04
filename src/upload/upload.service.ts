@@ -3,14 +3,31 @@ import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { PrismaService } from '../prisma/prisma.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class UploadService {
   constructor(private prisma: PrismaService) {}
 
+  handleFileUpload(filePath: string): { message: string } {
+    console.log(`File uploaded at ${filePath}`);
+
+    this.processFile(filePath).catch((error) => {
+      console.error('Error processing file:', error);
+    });
+
+    return { message: 'File uploaded successfully, processing in background.' };
+  }
+
   async processFile(filePath: string) {
     try {
-      console.log(filePath);
+      const documentID = uuidv4();
+
+      await this.prisma.document.updateMany({
+        where: { docID: documentID },
+        data: { processing: false },
+      });
+
       const loader = new PDFLoader(filePath);
       const chunks = await loader.load();
 
@@ -21,19 +38,21 @@ export class UploadService {
 
       const docs = await textSplitter.splitDocuments(chunks);
       console.log(docs);
-      return await this.createAndStoreVectorEmbeddings(docs);
+      await this.createAndStoreVectorEmbeddings(docs, documentID);
+      await this.prisma.document.updateMany({
+        where: { docID: documentID },
+        data: { processing: true },
+      });
     } catch (e) {
       console.error(e);
       throw new Error('PDF docs chunking failed!');
     }
   }
 
-  async createAndStoreVectorEmbeddings(docs) {
+  async createAndStoreVectorEmbeddings(docs, documentID) {
     const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: '',
+      openAIApiKey: process.env.OPENAI_API_KEY,
     });
-
-    const documentID = 'lolxdxd';
 
     for (const doc of docs) {
       const createdDoc = await this.prisma.document.create({
@@ -47,5 +66,11 @@ export class UploadService {
       await this.prisma
         .$executeRaw`UPDATE "Document" SET vector = ${vectors} WHERE id = ${createdDoc.id}`;
     }
+  }
+
+  async findDocumentsByDocumentID(documentID: string) {
+    return this.prisma.document.findMany({
+      where: { docID: documentID },
+    });
   }
 }

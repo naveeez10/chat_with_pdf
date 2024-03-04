@@ -16,11 +16,12 @@ datasource db {
 }
 
 model Document {
-  id       String                       @id @default(cuid())
-  docID    String
-  content  String
-  vector   Unsupported("vector(1536)")?
-  metadata Json
+  id         String                       @id @default(cuid())
+  docID      String
+  content    String
+  vector     Unsupported("vector(1536)")?
+  metadata   Json
+  processing Boolean                      @default(false)
 
   @@map("Document")
 }
