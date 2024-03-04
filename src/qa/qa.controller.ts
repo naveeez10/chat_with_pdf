@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { QaService } from './qa.service';
 import { CreateQuestionDto } from './CreateQuestionDto';
 
@@ -6,11 +6,16 @@ import { CreateQuestionDto } from './CreateQuestionDto';
 export class QaController {
   constructor(private readonly qaService: QaService) {}
 
-  @Post()
+  @Post('/:documentId')
   async returnAnswerForQuestionFromVectorStore(
+    @Param('documentId') documentId: string,
     @Body() question: CreateQuestionDto,
   ) {
     const { userPrompt } = question;
-    return this.qaService.returnAnswerForQuestionFromVectorStore(userPrompt);
+    console.log(documentId);
+    return this.qaService.returnAnswerForQuestionFromVectorStore(
+      userPrompt,
+      documentId,
+    );
   }
 }
