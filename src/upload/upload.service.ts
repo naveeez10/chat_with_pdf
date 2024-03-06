@@ -63,7 +63,7 @@ export class UploadService {
       );
     }
   }
-  async processFile(filePath: string, documentID) {
+  async processFile(filePath: string, documentID: string) {
     try {
       await this.prisma.documentDetail.updateMany({
         where: { id: documentID },
@@ -86,12 +86,16 @@ export class UploadService {
         data: { status: FileEmbeddingStatus.completed },
       });
     } catch (e) {
+      await this.prisma.documentDetail.updateMany({
+        where: { id: documentID },
+        data: { status: FileEmbeddingStatus.failed },
+      });
       console.error(e);
       throw new Error('PDF docs chunking failed!');
     }
   }
 
-  async createAndStoreVectorEmbeddings(docs, documentID) {
+  async createAndStoreVectorEmbeddings(docs, documentID: string) {
     const embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
