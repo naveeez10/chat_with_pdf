@@ -4,6 +4,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { PrismaService } from '../prisma/prisma.service';
 import { FileEmbeddingStatus } from './file.status';
+import { BlobServiceClient } from '@azure/storage-blob';
 
 @Injectable()
 export class UploadService {
@@ -12,26 +13,55 @@ export class UploadService {
   async handleFileUpload(file: Express.Multer.File): Promise<{
     documentId: string;
     message: string;
+    documentUrl: string;
   }> {
     const createdDocument = await this.prisma.documentDetail.create({
       data: {
         name: file.originalname,
         status: FileEmbeddingStatus.notStarted,
+        documentUrl: '',
       },
     });
 
-    console.log(`File uploaded at ${file.path}`);
     const docId = createdDocument.id;
-    this.processFile(file.path, docId).catch((error) => {
-      console.error('Error processing file:', error);
-    });
 
-    return {
-      message: 'File uploaded successfully, processing in background.',
-      documentId: docId,
-    };
+    try {
+      const blobServiceClient = BlobServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING,
+      );
+      const containerClient = blobServiceClient.getContainerClient('azurite');
+      await containerClient.createIfNotExists();
+
+      const blockBlobClient = containerClient.getBlockBlobClient(
+        `${docId}/${file.originalname}`,
+      );
+      await blockBlobClient.uploadFile(file.path);
+
+      const documentUrl = blockBlobClient.url;
+
+      await this.prisma.documentDetail.update({
+        where: { id: docId },
+        data: { documentUrl: documentUrl },
+      });
+
+      console.log(`File uploaded at ${documentUrl}`);
+
+      this.processFile(file.path, docId).catch((error) => {
+        console.error('Error processing file:', error);
+      });
+
+      return {
+        message: 'File uploaded successfully, processing in background.',
+        documentId: docId,
+        documentUrl: documentUrl,
+      };
+    } catch (error) {
+      console.error(
+        'Error uploading file to Azurite or updating database:',
+        error,
+      );
+    }
   }
-
   async processFile(filePath: string, documentID) {
     try {
       await this.prisma.documentDetail.updateMany({

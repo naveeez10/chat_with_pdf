@@ -41,7 +41,7 @@ export class QaService {
         columns: {
           id: PrismaVectorStore.IdColumn,
           content: PrismaVectorStore.ContentColumn,
-          docID: PrismaVectorStore.ContentColumn,
+          documentId: PrismaVectorStore.ContentColumn,
         },
       });
 

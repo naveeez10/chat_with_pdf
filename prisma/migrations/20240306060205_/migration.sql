@@ -1,17 +1,12 @@
-/*
-  Warnings:
-
-  - You are about to drop the `Document` table. If the table is not empty, all the data it contains will be lost.
-
-*/
--- DropTable
-DROP TABLE "Document";
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- CreateTable
 CREATE TABLE "DocumentDetail" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "status" TEXT NOT NULL,
+    "documentUrl" TEXT NOT NULL,
 
     CONSTRAINT "DocumentDetail_pkey" PRIMARY KEY ("id")
 );
@@ -19,7 +14,8 @@ CREATE TABLE "DocumentDetail" (
 -- CreateTable
 CREATE TABLE "DocumentEmbedding" (
     "id" TEXT NOT NULL,
-    "vector" vector(1536) NOT NULL,
+    "vector" vector(1536),
+    "content" TEXT NOT NULL,
     "documentId" TEXT NOT NULL,
 
     CONSTRAINT "DocumentEmbedding_pkey" PRIMARY KEY ("id")

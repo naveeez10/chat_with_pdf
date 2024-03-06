@@ -11,20 +11,21 @@ datasource db {
 
 // DocumentDetail model stores basic details about the document
 model DocumentDetail {
-  id         String              @id @default(cuid())
-  name       String
-  status     String
-  embeddings DocumentEmbedding[]
+  id          String              @id @default(cuid())
+  name        String
+  status      String
+  documentUrl String
+  embeddings  DocumentEmbedding[]
 
   @@map("DocumentDetail")
 }
 
 model DocumentEmbedding {
-  id         String                      @id @default(cuid())
+  id         String                       @id @default(cuid())
   vector     Unsupported("vector(1536)")?
   content    String
   documentId String
-  document   DocumentDetail              @relation(fields: [documentId], references: [id])
+  document   DocumentDetail               @relation(fields: [documentId], references: [id])
 
   @@map("DocumentEmbedding")
 }
