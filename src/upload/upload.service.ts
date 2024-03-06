@@ -31,6 +31,7 @@ export class UploadService {
       );
       const containerClient = blobServiceClient.getContainerClient('azurite');
       await containerClient.createIfNotExists();
+      await containerClient.setAccessPolicy('container');
 
       const blockBlobClient = containerClient.getBlockBlobClient(
         `${docId}/${file.originalname}`,
