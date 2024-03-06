@@ -102,6 +102,7 @@ export class UploadService {
 
     for (const doc of docs) {
       const vectors = await embeddings.embedQuery(doc.pageContent);
+
       const createdDoc = await this.prisma.documentEmbedding.create({
         data: {
           documentId: documentID,
