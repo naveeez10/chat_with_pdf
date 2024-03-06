@@ -36,7 +36,7 @@ export class UploadController {
       throw new BadRequestException('File is missing');
     }
     try {
-      const processedData = this.uploadService.handleFileUpload(file.path);
+      const processedData = this.uploadService.handleFileUpload(file);
       console.log(processedData);
       return processedData;
     } catch (error) {
@@ -50,6 +50,6 @@ export class UploadController {
     if (documents.length === 0) {
       return { message: 'No documents found with the provided documentID.' };
     }
-    return { processing: documents[0].processing };
+    return { status: documents[0].status };
   }
 }

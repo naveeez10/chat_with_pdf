@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaVectorStore } from '@langchain/community/vectorstores/prisma';
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
-import { Document, Prisma, PrismaClient } from '@prisma/client';
+import { DocumentEmbedding, Prisma, PrismaClient } from '@prisma/client';
 import { PromptTemplate } from '@langchain/core/prompts';
 
 @Injectable()
@@ -32,22 +32,21 @@ export class QaService {
     try {
       const db = new PrismaClient();
 
-      const vectorStore = PrismaVectorStore.withModel<Document>(db).create(
-        new OpenAIEmbeddings(),
-        {
-          prisma: Prisma,
-          tableName: 'Document',
-          vectorColumnName: 'vector',
-          columns: {
-            id: PrismaVectorStore.IdColumn,
-            content: PrismaVectorStore.ContentColumn,
-            docID: PrismaVectorStore.ContentColumn,
-          },
+      const vectorStore = PrismaVectorStore.withModel<DocumentEmbedding>(
+        db,
+      ).create(new OpenAIEmbeddings(), {
+        prisma: Prisma,
+        tableName: 'DocumentEmbedding',
+        vectorColumnName: 'vector',
+        columns: {
+          id: PrismaVectorStore.IdColumn,
+          content: PrismaVectorStore.ContentColumn,
+          docID: PrismaVectorStore.ContentColumn,
         },
-      );
+      });
 
       const filter = {
-        docID: {
+        documentId: {
           equals: documentID,
         },
       };

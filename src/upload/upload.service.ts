@@ -3,17 +3,26 @@ import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { PrismaService } from '../prisma/prisma.service';
-import { v4 as uuidv4 } from 'uuid';
+import { FileEmbeddingStatus } from './file.status';
 
 @Injectable()
 export class UploadService {
   constructor(private prisma: PrismaService) {}
 
-  handleFileUpload(filePath: string): { documentId: string; message: string } {
-    console.log(`File uploaded at ${filePath}`);
+  async handleFileUpload(file: Express.Multer.File): Promise<{
+    documentId: string;
+    message: string;
+  }> {
+    const createdDocument = await this.prisma.documentDetail.create({
+      data: {
+        name: file.originalname,
+        status: FileEmbeddingStatus.notStarted,
+      },
+    });
 
-    const docId = uuidv4();
-    this.processFile(filePath, docId).catch((error) => {
+    console.log(`File uploaded at ${file.path}`);
+    const docId = createdDocument.id;
+    this.processFile(file.path, docId).catch((error) => {
       console.error('Error processing file:', error);
     });
 
@@ -25,9 +34,9 @@ export class UploadService {
 
   async processFile(filePath: string, documentID) {
     try {
-      await this.prisma.document.updateMany({
-        where: { docID: documentID },
-        data: { processing: true },
+      await this.prisma.documentDetail.updateMany({
+        where: { id: documentID },
+        data: { status: FileEmbeddingStatus.processing },
       });
 
       const loader = new PDFLoader(filePath);
@@ -41,9 +50,9 @@ export class UploadService {
       const docs = await textSplitter.splitDocuments(chunks);
       console.log(docs);
       await this.createAndStoreVectorEmbeddings(docs, documentID);
-      await this.prisma.document.updateMany({
-        where: { docID: documentID },
-        data: { processing: false },
+      await this.prisma.documentDetail.updateMany({
+        where: { id: documentID },
+        data: { status: FileEmbeddingStatus.completed },
       });
     } catch (e) {
       console.error(e);
@@ -57,23 +66,25 @@ export class UploadService {
     });
 
     for (const doc of docs) {
-      const createdDoc = await this.prisma.document.create({
+      const vectors = await embeddings.embedQuery(doc.pageContent);
+      const createdDoc = await this.prisma.documentEmbedding.create({
         data: {
+          documentId: documentID,
           content: doc.pageContent,
-          docID: documentID,
-          metadata: doc.metadata,
+        },
+        include: {
+          document: true,
         },
       });
-      const vectors = await embeddings.embedQuery(doc.pageContent);
-      await this.prisma.$executeRaw`UPDATE "Document"
+      await this.prisma.$executeRaw`UPDATE "DocumentEmbedding"
                      SET vector = ${vectors}
                      WHERE id = ${createdDoc.id}`;
     }
   }
 
   async findDocumentsByDocumentID(documentID: string) {
-    return this.prisma.document.findMany({
-      where: { docID: documentID },
+    return this.prisma.documentDetail.findMany({
+      where: { id: documentID },
     });
   }
 }
