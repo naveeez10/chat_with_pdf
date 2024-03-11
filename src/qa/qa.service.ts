@@ -11,7 +11,7 @@ export class QaService {
 
   async returnAnswerForQuestionFromVectorStore(
     question: string,
-    docId: string,
+    docId: string[],
   ): Promise<any> {
     const context = await this.findSimilarDocuments(docId, question, 3);
     const model = new ChatOpenAI();
@@ -25,7 +25,7 @@ export class QaService {
   }
 
   async findSimilarDocuments(
-    documentID: string,
+    documentIDs: string[],
     question: string,
     k: number,
   ): Promise<any> {
@@ -47,11 +47,11 @@ export class QaService {
 
       const filter = {
         documentId: {
-          equals: documentID,
+          in: documentIDs,
         },
       };
 
-      console.log('document id:', documentID);
+      console.log('document id:', documentIDs);
       const results = await vectorStore.similaritySearchWithScore(
         question,
         k,

@@ -10,42 +10,17 @@ import { BlobServiceClient } from '@azure/storage-blob';
 export class UploadService {
   constructor(private prisma: PrismaService) {}
 
-  async handleFileUpload(file: Express.Multer.File): Promise<{
+  async processUpload(file: Express.Multer.File): Promise<{
     documentId: string;
     message: string;
     documentUrl: string;
   }> {
-    const createdDocument = await this.prisma.documentDetail.create({
-      data: {
-        name: file.originalname,
-        status: FileEmbeddingStatus.notStarted,
-        documentUrl: '',
-      },
-    });
-
+    const createdDocument = await this.registerDocument(file);
+    console.log('Created document:', createdDocument);
     const docId = createdDocument.id;
-
     try {
-      const blobServiceClient = BlobServiceClient.fromConnectionString(
-        process.env.AZURE_STORAGE_CONNECTION_STRING,
-      );
-      const containerClient = blobServiceClient.getContainerClient('azurite');
-      await containerClient.createIfNotExists();
-      await containerClient.setAccessPolicy('container');
-
-      const blockBlobClient = containerClient.getBlockBlobClient(
-        `${docId}/${file.originalname}`,
-      );
-      await blockBlobClient.uploadFile(file.path);
-
-      const documentUrl = blockBlobClient.url;
-
-      await this.prisma.documentDetail.update({
-        where: { id: docId },
-        data: { documentUrl: documentUrl },
-      });
-
-      console.log(`File uploaded at ${documentUrl}`);
+      const documentUrl = await this.uploadToBlobStorage(file, docId);
+      await this.updateDocumentUrl(docId, documentUrl);
 
       this.processFile(file.path, docId).catch((error) => {
         console.error('Error processing file:', error);
@@ -54,73 +29,112 @@ export class UploadService {
       return {
         message: 'File uploaded successfully, processing in background.',
         documentId: docId,
-        documentUrl: documentUrl,
+        documentUrl,
       };
     } catch (error) {
-      console.error(
-        'Error uploading file to Azurite or updating database:',
-        error,
-      );
+      console.error('Error handling the upload process:', error);
     }
   }
-  async processFile(filePath: string, documentID: string) {
+
+  private async registerDocument(file: Express.Multer.File) {
+    return this.prisma.documentDetail.create({
+      data: {
+        name: file.originalname,
+        status: FileEmbeddingStatus.notStarted,
+        documentUrl: '',
+      },
+    });
+  }
+
+  private async uploadToBlobStorage(
+    file: Express.Multer.File,
+    documentId: string,
+  ) {
+    const blobServiceClient = BlobServiceClient.fromConnectionString(
+      process.env.AZURE_STORAGE_CONNECTION_STRING,
+    );
+    const containerClient =
+      blobServiceClient.getContainerClient('document-storage');
+    await containerClient.createIfNotExists();
+    await containerClient.setAccessPolicy('container');
+
+    const blockBlobClient = containerClient.getBlockBlobClient(
+      `${documentId}/${file.originalname}`,
+    );
+    await blockBlobClient.uploadFile(file.path);
+
+    console.log(`File uploaded at ${blockBlobClient.url}`);
+    return blockBlobClient.url;
+  }
+
+  private async updateDocumentUrl(documentId: string, documentUrl: string) {
+    await this.prisma.documentDetail.update({
+      where: { id: documentId },
+      data: { documentUrl },
+    });
+  }
+
+  async processFile(filePath: string, documentId: string) {
+    await this.setDocumentStatus(documentId, FileEmbeddingStatus.processing);
+
     try {
-      await this.prisma.documentDetail.updateMany({
-        where: { id: documentID },
-        data: { status: FileEmbeddingStatus.processing },
-      });
-
-      const loader = new PDFLoader(filePath);
-      const chunks = await loader.load();
-
-      const textSplitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 1000,
-        chunkOverlap: 200,
-      });
-
-      const docs = await textSplitter.splitDocuments(chunks);
-      console.log(docs);
-      await this.createAndStoreVectorEmbeddings(docs, documentID);
-      await this.prisma.documentDetail.updateMany({
-        where: { id: documentID },
-        data: { status: FileEmbeddingStatus.completed },
-      });
+      const chunks = await this.loadPDFChunks(filePath);
+      await this.createAndStoreVectorEmbeddings(chunks, documentId);
+      await this.setDocumentStatus(documentId, FileEmbeddingStatus.completed);
     } catch (e) {
-      await this.prisma.documentDetail.updateMany({
-        where: { id: documentID },
-        data: { status: FileEmbeddingStatus.failed },
-      });
+      await this.setDocumentStatus(documentId, FileEmbeddingStatus.failed);
       console.error(e);
-      throw new Error('PDF docs chunking failed!');
+      throw new Error('Processing PDF failed!');
     }
   }
 
-  async createAndStoreVectorEmbeddings(docs, documentID: string) {
+  private async loadPDFChunks(filePath: string) {
+    const loader = new PDFLoader(filePath);
+    const textSplitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1000,
+      chunkOverlap: 200,
+    });
+    return textSplitter.splitDocuments(await loader.load());
+  }
+
+  private async setDocumentStatus(
+    documentId: string,
+    status: FileEmbeddingStatus,
+  ) {
+    await this.prisma.documentDetail.updateMany({
+      where: { id: documentId },
+      data: { status },
+    });
+  }
+
+  async createAndStoreVectorEmbeddings(docs, documentId: string) {
     const embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
 
     for (const doc of docs) {
       const vectors = await embeddings.embedQuery(doc.pageContent);
-
-      const createdDoc = await this.prisma.documentEmbedding.create({
-        data: {
-          documentId: documentID,
-          content: doc.pageContent,
-        },
-        include: {
-          document: true,
-        },
-      });
-      await this.prisma.$executeRaw`UPDATE "DocumentEmbedding"
-                     SET vector = ${vectors}
-                     WHERE id = ${createdDoc.id}`;
+      await this.storeDocumentEmbedding(documentId, doc.pageContent, vectors);
     }
   }
 
-  async findDocumentsByDocumentID(documentID: string) {
-    return this.prisma.documentDetail.findMany({
-      where: { id: documentID },
+  private async storeDocumentEmbedding(
+    documentId: string,
+    content: string,
+    vectors: any,
+  ) {
+    const createdDoc = await this.prisma.documentEmbedding.create({
+      data: { documentId, content },
+      include: { document: true },
+    });
+    await this.prisma.$executeRaw`UPDATE "DocumentEmbedding"
+                     SET vector = ${vectors}
+                     WHERE id = ${createdDoc.id}`;
+  }
+
+  async findDocumentById(documentId: string) {
+    return this.prisma.documentDetail.findUnique({
+      where: { id: documentId },
     });
   }
 }

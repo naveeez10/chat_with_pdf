@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { HttpStatus, INestApplication } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
+import * as path from 'path';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 
@@ -16,19 +17,30 @@ describe('AppController (e2e)', () => {
   });
 
   it('/upload (POST) - should upload file successfully', () => {
+    const filePath = path.join(
+      __dirname,
+      '../src/files/workflow_automation_research.pdf',
+    );
     return request(app.getHttpServer())
       .post('/upload')
-      .attach('file', 'path/to/your/test/file.txt')
-      .expect(HttpStatus.OK);
+      .attach('file', filePath)
+      .expect(201);
   });
 
   it('/upload/status/:documentID (GET) - should return processing status', async () => {
     const documentID = 'testDocumentId';
     return request(app.getHttpServer())
       .get(`/upload/status/${documentID}`)
-      .expect(HttpStatus.OK);
+      .expect(200);
   });
 
+  it('/qa (POST) - should return the answer for the question from given document Ids', async () => {
+    const payload = {
+      documentIds: ['cltfetcd30000fhh4r8orhzux'],
+      userPrompt: 'summarize this overall pdf.',
+    };
+    return request(app.getHttpServer()).post('/qa').send(payload).expect(201);
+  });
   afterAll(async () => {
     await app.close();
   });

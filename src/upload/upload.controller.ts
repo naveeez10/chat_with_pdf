@@ -14,42 +14,41 @@ import { extname } from 'path';
 
 @Controller('upload')
 export class UploadController {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(private readonly service: UploadService) {}
 
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: '../uploads',
-        filename: (req, file, cb) => {
-          const randomName = Array(32)
-            .fill(null)
-            .map(() => Math.round(Math.random() * 16).toString(16))
-            .join('');
-          cb(null, `${randomName}${extname(file.originalname)}`);
-        },
+        destination: './uploads',
+        filename: generateFilename,
       }),
     }),
   )
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async upload(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('File is missing');
     }
     try {
-      const processedData = this.uploadService.handleFileUpload(file);
-      console.log(processedData);
-      return processedData;
+      const result = await this.service.processUpload(file);
+      return result;
     } catch (error) {
       throw new BadRequestException(error.message);
     }
   }
-  @Get('status/:documentID')
-  async checkProcessingStatus(@Param('documentID') documentID: string) {
-    const documents =
-      await this.uploadService.findDocumentsByDocumentID(documentID);
-    if (documents.length === 0) {
-      return { message: 'No documents found with the provided documentID.' };
+
+  @Get('status/:id')
+  async getStatus(@Param('id') id: string) {
+    const document = await this.service.findDocumentById(id);
+    console.log('document', document);
+    if (!document) {
+      return { message: 'Document not found.' };
     }
-    return { status: documents[0].status };
+    return { status: document.status };
   }
+}
+
+function generateFilename(req, file, callback) {
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+  callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
 }
