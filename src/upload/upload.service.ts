@@ -5,6 +5,8 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { PrismaService } from '../prisma/prisma.service';
 import { FileEmbeddingStatus } from './file.status';
 import { BlobServiceClient } from '@azure/storage-blob';
+import { PrismaVectorStore } from '@langchain/community/vectorstores/prisma';
+import { DocumentEmbedding, Prisma, PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class UploadService {
@@ -108,28 +110,29 @@ export class UploadService {
   }
 
   async createAndStoreVectorEmbeddings(docs, documentId: string) {
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: process.env.OPENAI_API_KEY,
+    const db = new PrismaClient();
+    const vectorStore = PrismaVectorStore.withModel<DocumentEmbedding>(
+      db,
+    ).create(new OpenAIEmbeddings(), {
+      prisma: Prisma,
+      tableName: 'DocumentEmbedding',
+      vectorColumnName: 'vector',
+      columns: {
+        id: PrismaVectorStore.IdColumn,
+        content: PrismaVectorStore.ContentColumn,
+        documentId: true,
+      },
     });
 
-    for (const doc of docs) {
-      const vectors = await embeddings.embedQuery(doc.pageContent);
-      await this.storeDocumentEmbedding(documentId, doc.pageContent, vectors);
-    }
-  }
-
-  private async storeDocumentEmbedding(
-    documentId: string,
-    content: string,
-    vectors: any,
-  ) {
-    const createdDoc = await this.prisma.documentEmbedding.create({
-      data: { documentId, content },
-      include: { document: true },
-    });
-    await this.prisma.$executeRaw`UPDATE "DocumentEmbedding"
-                     SET vector = ${vectors}
-                     WHERE id = ${createdDoc.id}`;
+    await vectorStore.addModels(
+      await db.$transaction(
+        docs.map((doc) =>
+          db.documentEmbedding.create({
+            data: { content: doc.pageContent, documentId: documentId },
+          }),
+        ),
+      ),
+    );
   }
 
   async findDocumentById(documentId: string) {
