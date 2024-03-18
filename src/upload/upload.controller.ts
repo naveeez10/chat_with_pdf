@@ -23,6 +23,9 @@ export class UploadController {
         destination: './uploads',
         filename: generateFilename,
       }),
+      limits: {
+        fileSize: 1 * 1024 * 1024,
+      },
     }),
   )
   async upload(@UploadedFile() file: Express.Multer.File) {
