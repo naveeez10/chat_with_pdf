@@ -7,7 +7,7 @@ import { FileEmbeddingStatus } from './file.status';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { PrismaVectorStore } from '@langchain/community/vectorstores/prisma';
 import { DocumentEmbedding, Prisma, PrismaClient } from '@prisma/client';
-
+import * as fs from 'fs';
 @Injectable()
 export class UploadService {
   constructor(private prisma: PrismaService) {}
@@ -83,8 +83,10 @@ export class UploadService {
       const chunks = await this.loadPDFChunks(filePath);
       await this.createAndStoreVectorEmbeddings(chunks, documentId);
       await this.setDocumentStatus(documentId, FileEmbeddingStatus.completed);
+      await this.deleteFile(filePath);
     } catch (e) {
       await this.setDocumentStatus(documentId, FileEmbeddingStatus.failed);
+      await this.deleteFile(filePath);
       console.error(e);
       throw new Error('Processing PDF failed!');
     }
@@ -138,6 +140,14 @@ export class UploadService {
   async findDocumentById(documentId: string) {
     return this.prisma.documentDetail.findUnique({
       where: { id: documentId },
+    });
+  }
+
+  async deleteFile(filePath: string) {
+    console.log('Deleting file:', filePath);
+    fs.unlink(filePath, (err) => {
+      if (err) throw err;
+      console.log(`${filePath} was deleted`);
     });
   }
 }
