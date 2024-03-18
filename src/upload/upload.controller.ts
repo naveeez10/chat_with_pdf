@@ -29,6 +29,11 @@ export class UploadController {
     if (!file) {
       throw new BadRequestException('File is missing');
     }
+    if (file.mimetype != 'application/pdf') {
+      throw new BadRequestException(
+        `File type is not supported. Only pdfs are supported`,
+      );
+    }
     try {
       const result = await this.service.processUpload(file);
       return result;
